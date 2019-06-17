@@ -38,25 +38,135 @@
     </header>
 
     <main role="main">
-        <section class="jumbotron text-center">
-            <form action="/" method="post">
-                <label>Blow in:</label><br>
-            <button type="submit" class="btn btn-primary">{{index . "in"}}</button>
-                <input type="hidden" name="pin" value="17">
-            </form>
-            <form action="/" method="post">
-                <label>Blow out:</label><br>
-                <button type="submit" class="btn btn-primary">{{index . "out"}}</button>
-                <input type="hidden" name="pin" value="18">
-            </form>
+        <section class="jumbotron">
+            <div class="container">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <form action="/" method="post">
+                            <label>Watering:</label><br>
+                            <button type="submit" class="btn btn-primary" {{if (eq .FansStatus.In.Manual 0) }} disabled {{end}}>Go</button>
+                            <input type="hidden" name="pumpToggle" value="27">
+                        </form>
+                    </div>
+                    <div class="col-lg-6">
+                        <form action="/" method="post" id="pumpToggle" name="pumpToggle">
+                            <label>Watering control mode:</label><br>
+                            <button type="submit" class="btn {{if (eq .FansStatus.In.Manual 1) }} btn-danger {{else}} btn-success {{end}}">{{if (eq .FansStatus.In.Manual 1) }} Manual {{else}} Auto {{end}}</button>
+                            <input type="hidden" name="pumpToggle" value="27">
+                        </form>
+                    </div>
 
-            <form id="fan_control" action="/" method="post">
-                <label>Fan speed:</label><br>
-                <input id="fan_speed" name="fanSpeed" type="text" data-slider-ticks="[1, 250, 500, 750, 1000]" data-slider-ticks-snap-bounds="30" data-slider-ticks-labels='["1%", "25%", "50%", "75%", "100%"]'/>
-            </form>
+                </div>
+                <br>
+                <div class="row">
+                    <div class="col-lg-6">
+                        <form action="/" method="post">
+                            <label>Blow in:</label><br>
+                            <button type="submit" class="btn {{if (eq .FansStatus.In.Status 1) }} btn-success {{else}} btn-danger {{end}}" {{if (eq .FansStatus.In.Manual 0) }} disabled {{end}}>{{if (eq .FansStatus.In.Status 1) }} On {{else}} Off {{end}}</button>
+                            <input type="hidden" name="pin" value="17">
+                        </form>
+                    </div>
+                    <div class="col-lg-6">
+                        <form action="/" method="post" id="controlToggle" name="controlToggle">
+                            <label>Fan control mode:</label><br>
+                            <button type="submit" class="btn {{if (eq .FansStatus.In.Manual 1) }} btn-danger {{else}} btn-success {{end}}">{{if (eq .FansStatus.In.Manual 1) }} Manual {{else}} Auto {{end}}</button>
+                            <input type="hidden" name="controlToggle" value="1">
+                        </form>
+                    </div>
+
+                </div>
+                <div class="row">
+                    <div class="col-lg-6">
+                        <form action="/" method="post">
+                            <label>Blow out:</label><br>
+                            <button type="submit" class="btn {{if (eq .FansStatus.Out.Status 1) }} btn-success {{else}} btn-danger {{end}}" {{if (eq .FansStatus.In.Manual 0) }} disabled {{end}}> {{if (eq .FansStatus.Out.Status 1) }} On {{else}} Off {{end}}</button>
+                            <input type="hidden" name="pin" value="18">
+                        </form>
+
+                    </div>
+                    <div class="col-lg-6">
+                        <form id="fan_control" action="/" method="post">
+                            <label>Fans speed:</label><br>
+                            <input id="fan_speed" name="fanSpeed" type="text" data-slider-ticks="[1, 250, 500, 750, 1000]" data-slider-ticks-snap-bounds="30" data-slider-ticks-labels='["1%", "25%", "50%", "75%", "100%"]' {{if (eq .FansStatus.In.Manual 0) }} data-slider-enabled="false" {{end}}/>
+                        </form>
+                    </div>
+                </div>
+                <br>
+                <div class="row text-center">
+                    <div class="col-lg-4">
+                        <table class="table">
+                            <thead class="thead-dark">
+                            <tr>
+                                <th scope="col" colspan="2">Temperature °C</th>
+                            </tr>
+                            <tr>
+                                <th scope="col">Zone</th>
+                                <th scope="col">Value</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{ range $id, $data := .SensorsData.Temperature.current }}
+                                <tr>
+                                    <th scope="row">{{ $data.Name }}</th>
+                                    <td class="temperature_{{ $data.Name }}" id="value_{{ $data.Id }}">{{ $data.Value }} °C</td>
+                                </tr>
+                            {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-lg-4">
+                        <table class="table">
+                            <thead class="thead-dark">
+                            <tr>
+                                <th scope="col" colspan="2">Humidity %</th>
+                            </tr>
+                            <tr>
+                                <th scope="col">Zone</th>
+                                <th scope="col">Value</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{ range $id, $data := .SensorsData.Humidity.current }}
+                                <tr>
+                                    <th scope="row" >{{ $data.Name }}</th>
+                                    <td class="humidity_{{ $data.Name }}" id="value_{{ $data.Id }}">{{ $data.Value }} %</td>
+                                </tr>
+                            {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-lg-4">
+                        <table class="table">
+                            <thead class="thead-dark">
+                            <tr>
+                                <th scope="col" colspan="2">Soil Moisture %</th>
+                            </tr>
+                            <tr>
+                                <th scope="col">Zone</th>
+                                <th scope="col">Value</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{ range $id, $data := .SensorsData.SoilMoisture.current }}
+                                <tr>
+                                    <th scope="row">{{ $data.Name }}</th>
+                                    <td class="soil_{{ $data.Name }}" id="value_{{ $data.Id }}">{{ $data.Value }} %</td>
+                                </tr>
+                            {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 col-lg-12">
+                        <canvas id="myChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </section>
-
     </main>
-    <script>let speed = {{index . "speed"}}</script>
+    <script>
+        let speed = {{.FansStatus.In.FanSpeed}}
+    </script>
     {{ template "footer" }}
 {{ end }}

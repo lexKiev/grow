@@ -1,8 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/kidoman/embd/host/all"
 	"github.com/stianeikeland/go-rpio"
 	"html/template"
 	"net/http"
@@ -10,43 +13,74 @@ import (
 	"strconv"
 )
 
+type outputData struct {
+	FansStatus  fansData
+	SensorsData SensorData
+}
+
 func indexHandler(writer http.ResponseWriter, request *http.Request) {
 	t, err := template.ParseFiles("templates/index.html", "templates/head.html", "templates/footer.html")
 	if err != nil {
 		fmt.Fprint(writer, err.Error())
 	}
 
+	output := outputData{
+		FansStatus:  fansDataFromDb(),
+		SensorsData: sensorsDatafromDb(),
+	}
+
 	if request.Method != http.MethodPost {
-		t.ExecuteTemplate(writer, "index", getPinStatus())
+		t.ExecuteTemplate(writer, "index", output)
 		return
 	}
 
-	pinNum, err := strconv.ParseInt(request.FormValue("pin"), 10, 64)
-
-	if err != nil {
-		fmt.Fprint(writer, err.Error())
-		return
+	request.ParseForm()
+	formsSent := request.Form
+	fmt.Println(formsSent)
+	if _, ok := formsSent["controlToggle"]; ok {
+		fansControlModeToggle()
 	}
 
-	pin := rpio.Pin(pinNum)
-	pin.Output()
-	pin.Toggle()
-	t.ExecuteTemplate(writer, "index", getPinStatus())
+	if _, ok := formsSent["pin"]; ok {
+		pinNum, err := strconv.ParseInt(request.FormValue("pin"), 10, 64)
+		if err != nil {
+			fmt.Fprint(writer, err.Error())
+			return
+		}
+		fansToggle(pinNum, "toggle")
+	}
+
+	if _, ok := formsSent["pumpToggle"]; ok {
+		pumpToggle("toggle")
+	}
+
+	output.FansStatus = fansDataFromDb()
+	t.ExecuteTemplate(writer, "index", output)
 	return
 }
 
 func ajaxHandler(writer http.ResponseWriter, request *http.Request) {
-	type Profile struct {
-		Speed string
+	speed := request.FormValue("speed")
+
+	fansSetSpeed(speed)
+
+	js, err := json.Marshal(speed)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	profile := Profile{Speed: request.FormValue("speed")}
-	cmd := exec.Command("gpio", "pwm", "23", profile.Speed)
-	cmdErr := cmd.Run()
-	if cmdErr != nil {
-		fmt.Println(cmdErr)
+
+	writer.Header().Set("Content-Type", "application/json")
+	writer.Write(js)
+}
+
+func ajaxUpdateData(writer http.ResponseWriter, request *http.Request) {
+	output := outputData{
+		FansStatus:  fansDataFromDb(),
+		SensorsData: sensorsDatafromDb(),
 	}
-	currentSpeed = profile.Speed
-	js, err := json.Marshal(profile)
+
+	js, err := json.Marshal(output)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return
@@ -72,37 +106,36 @@ func initRpi() {
 	} else {
 		fmt.Println("PWM initialized!")
 	}
+
 }
 
-func getPinStatus() map[string]string {
-	pinStates := make(map[string]string)
-	for k, v := range usedPins {
-		pin := rpio.Pin(v)
-		res := pin.Read()
-		var pinStatus int64 = int64(res)
-		if pinStatus == 1 {
-			pinStates[k] = "on"
-		} else {
-			pinStates[k] = "off"
-		}
+func dbConn() (db *sql.DB) {
+	dbDriver := "mysql"
+	dbUser := "*"
+	dbPass := "*"
+	dbName := "*"
+	dbHost := "*"
+	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@"+dbHost+"/"+dbName)
+	if err != nil {
+		panic(err.Error())
 	}
 
-	pinStates["speed"] = currentSpeed
+	db.SetMaxIdleConns(100)
+	db.SetMaxOpenConns(100)
 
-	return pinStates
+	return db
 }
 
-var usedPins = map[string]int{"in": 17, "out": 18};
-
-var currentSpeed string
-
 func main() {
-
-	fmt.Println("Server UP on port 8081")
 	initRpi()
+	hyg = initHygrometer()
+	upperSensor, lowerSensor = initMeteostation()
+	go sensorsRun(1)
+	go controlRun(1)
+	fmt.Println("Server UP on port 8081")
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./assets/"))))
-
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/changeSpeed", ajaxHandler)
+	http.HandleFunc("/updateData", ajaxUpdateData)
 	http.ListenAndServe(":8081", nil)
 }
